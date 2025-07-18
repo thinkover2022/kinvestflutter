@@ -49,28 +49,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
 
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-    try {
-      // StockDataProvider 초기화 (AuthProvider와는 별도 WebSocket 연결)
-      await ref.read(stockDataProvider.notifier).initialize();
-      
+    // AuthProvider에서 이미 WebSocket 연결 완료되었으므로
+    // StockDataProvider에 WebSocket 서비스 설정
+    final authNotifier = ref.read(authProvider.notifier);
+    final webSocketService = authNotifier.webSocketService;
+    
+    if (webSocketService != null) {
+      ref.read(stockDataProvider.notifier).setWebSocketService(webSocketService);
       if (mounted) {
         setState(() {
           _isInitialized = true;
         });
       }
-    } catch (e) {
+    } else {
       if (mounted) {
         setState(() {
           _isInitialized = false;
         });
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text('데이터 연결 실패: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
     }
   }

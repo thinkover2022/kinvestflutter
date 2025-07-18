@@ -150,6 +150,9 @@ class KisWebSocketService {
     if (!_isConnected) throw Exception('WebSocket not connected');
 
     final message = _createSubscriptionMessage(type, key, '1');
+    print('구독 메시지 전송: ${type.code} for $key');
+    print('전송 메시지: $message');
+    
     _channel!.sink.add(message);
     await Future.delayed(const Duration(milliseconds: 500));
     print('Subscribed to ${type.code} for $key');
@@ -184,6 +187,7 @@ class KisWebSocketService {
   void _onMessage(dynamic message) {
     try {
       final data = message.toString();
+      print('WebSocket 메시지 수신: ${data.length > 100 ? data.substring(0, 100) + "..." : data}');
 
       if (data.startsWith('0') || data.startsWith('1')) {
         _handleRealtimeData(data);
@@ -197,22 +201,31 @@ class KisWebSocketService {
 
   void _handleRealtimeData(String data) {
     final parts = data.split('|');
-    if (parts.length < 4) return;
+    if (parts.length < 4) {
+      print('잘못된 데이터 형식: $data');
+      return;
+    }
 
     final flag = parts[0];
     final trId = parts[1];
     final dataCount = parts.length > 2 ? int.tryParse(parts[2]) ?? 1 : 1;
     final payload = parts[3];
 
+    print('실시간 데이터 처리: flag=$flag, trId=$trId, dataCount=$dataCount');
+
     try {
       if (flag == '0') {
         switch (trId) {
           case 'H0STASP0':
+            print('국내 주식 호가 데이터 수신: trId=$trId');
             final quote = DomesticStockQuote.fromWebSocketData(payload);
+            print('파싱된 호가 데이터: ${quote.stockCode}');
             _domesticQuoteController?.add(quote);
             break;
           case 'H0STCNT0':
+            print('국내 주식 체결 데이터 수신: trId=$trId');
             final execution = DomesticStockExecution.fromWebSocketData(payload);
+            print('파싱된 체결 데이터: ${execution.stockCode} - ${execution.currentPrice}');
             _domesticExecutionController?.add(execution);
             break;
           case 'HDFSASP0':
@@ -259,11 +272,13 @@ class KisWebSocketService {
         return;
       }
 
+      print('응답 메시지 수신: tr_id=$trId');
+      
       final rtCd = jsonData['body']['rt_cd'];
       final msg = jsonData['body']['msg1'];
 
       if (rtCd == '0') {
-        print('Success: $msg');
+        print('구독 성공: tr_id=$trId, msg=$msg');
         
         if (trId == 'H0STCNI0' || trId == 'H0STCNI9' || trId == 'H0GSCNI0' || trId == 'H0GSCNI9') {
           _aesKey = jsonData['body']['output']['key'];
@@ -271,10 +286,11 @@ class KisWebSocketService {
           print('AES keys received for $trId');
         }
       } else {
-        print('Error: $msg');
+        print('구독 실패: tr_id=$trId, rt_cd=$rtCd, msg=$msg');
       }
     } catch (e) {
       print('Error parsing response message: $e');
+      print('Raw data: $data');
     }
   }
 

@@ -33,7 +33,7 @@ class KisAuthService {
     final body = json.encode({
       'grant_type': 'client_credentials',
       'appkey': appKey,
-      'secretKey': appSecret,
+      'secretkey': appSecret,
     });
 
     try {

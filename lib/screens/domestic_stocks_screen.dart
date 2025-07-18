@@ -41,18 +41,51 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
   }
 
   Future<void> _subscribeDefaultStocks() async {
+    print('_subscribeDefaultStocks 호출됨');
     final stockData = ref.read(stockDataProvider);
+    print('현재 구독된 종목 수: ${stockData.subscribedDomesticStocks.length}');
+    print('WebSocket 연결 상태: ${stockData.isConnected}');
+    
     if (stockData.subscribedDomesticStocks.isEmpty) {
+      print('구독할 기본 종목들: ${_defaultStocks.take(5).map((s) => s['code']).toList()}');
+      
       // 처음 5개 종목만 자동 구독
       for (int i = 0; i < 5 && i < _defaultStocks.length; i++) {
         try {
+          final stockCode = _defaultStocks[i]['code']!;
+          print('종목 구독 시도: $stockCode');
+          
           await ref.read(stockDataProvider.notifier)
-              .subscribeDomesticStock(_defaultStocks[i]['code']!);
+              .subscribeDomesticStock(stockCode);
+              
+          print('종목 구독 성공: $stockCode');
         } catch (e) {
-          // 개별 종목 구독 실패는 무시하고 계속 진행
+          print('종목 구독 실패: ${_defaultStocks[i]['code']} - $e');
         }
       }
+      
+      // 구독 후 상태 확인
+      final updatedData = ref.read(stockDataProvider);
+      print('구독된 종목들: ${updatedData.subscribedDomesticStocks.toList()}');
+      print('연결 상태: ${updatedData.isConnected}');
+      
+      // 장 시간 외일 때 테스트용 모의 데이터 추가
+      await _addMockDataForTesting();
     }
+  }
+  
+  Future<void> _addMockDataForTesting() async {
+    print('장 시간 외 - 테스트용 모의 데이터 추가');
+    
+    // 3초 후 모의 데이터 추가 (실제 데이터 수신을 시뮬레이션)
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      
+      print('모의 데이터 생성 시작');
+      
+      // StockDataProvider의 addMockData 메서드 호출
+      ref.read(stockDataProvider.notifier).addMockData();
+    });
   }
 
   @override

@@ -102,16 +102,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       await _authService!.initialize();
 
-      // 2. 인증 정보 검증 완료 (WebSocket 연결은 StockDataProvider에서 처리)
+      // 2. WebSocket 연결 시도 - 로그인 완료 조건
+      _webSocketService = KisWebSocketService(_authService!);
+      await _webSocketService!.connect();
 
-      // 3. 사용자 정보 저장
+      // 3. 인증 + WebSocket 연결 성공 후 사용자 정보 저장
       if (saveCredentials) {
         await _storageService.saveUserProfile(user);
       } else {
         await _storageService.updateUserLastLogin(user.email);
       }
 
-      // 4. 로그인 완료 상태로 변경
+      // 4. 로그인 완료 상태로 변경 (WebSocket 연결까지 성공)
       state = state.copyWith(
         isLoggedIn: true,
         currentUser: user,
@@ -120,8 +122,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
     } catch (e) {
       // 실패 시 정리
+      await _webSocketService?.disconnect();
       _authService?.clearAuthentication();
       _authService = null;
+      _webSocketService = null;
       
       state = state.copyWith(
         isLoggedIn: false,
@@ -133,6 +137,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout({bool clearStoredCredentials = true}) async {
+    // WebSocket 연결 해제
+    await _webSocketService?.disconnect();
+    _webSocketService = null;
+    
     // 인증 정보 정리
     _authService?.clearAuthentication();
     _authService = null;
