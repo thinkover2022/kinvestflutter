@@ -3,18 +3,21 @@ import '../services/kis_auth_service.dart';
 import '../services/kis_websocket_service.dart';
 import '../services/storage_service.dart';
 import '../models/user_profile.dart';
+import '../widgets/login_settings_dialog.dart';
 
 class AuthState {
   final bool isLoggedIn;
   final UserProfile? currentUser;
   final String? error;
   final bool isLoading;
+  final DataSourceType dataSource;
 
   const AuthState({
     this.isLoggedIn = false,
     this.currentUser,
     this.error,
     this.isLoading = false,
+    this.dataSource = DataSourceType.https,
   });
 
   AuthState copyWith({
@@ -22,12 +25,14 @@ class AuthState {
     UserProfile? currentUser,
     String? error,
     bool? isLoading,
+    DataSourceType? dataSource,
   }) {
     return AuthState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
       currentUser: currentUser ?? this.currentUser,
       error: error,
       isLoading: isLoading ?? this.isLoading,
+      dataSource: dataSource ?? this.dataSource,
     );
   }
 
@@ -54,7 +59,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final lastUser = await _storageService.getLastLoginUser();
       if (lastUser != null) {
-        await _performLoginWithUser(lastUser, saveCredentials: false);
+        await _performLoginWithUser(lastUser, saveCredentials: false, dataSource: lastUser.dataSource);
       }
     } catch (e) {
       // 자동 로그인 실패 시 저장된 정보 삭제
@@ -65,7 +70,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> loginWithEmail(String email) async {
     final userProfile = await _storageService.getUserProfile(email);
     if (userProfile != null) {
-      await _performLoginWithUser(userProfile, saveCredentials: false);
+      await _performLoginWithUser(userProfile, saveCredentials: false, dataSource: userProfile.dataSource);
     } else {
       throw Exception('사용자 정보를 찾을 수 없습니다');
     }
@@ -76,21 +81,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String appKey,
     required String appSecret,
     required bool isRealAccount,
+    DataSourceType dataSource = DataSourceType.https,
   }) async {
     final userProfile = UserProfile(
       email: email,
       appKey: appKey,
       appSecret: appSecret,
       isRealAccount: isRealAccount,
+      dataSource: dataSource,
       createdAt: DateTime.now(),
       lastLoginAt: DateTime.now(),
     );
 
-    await _performLoginWithUser(userProfile, saveCredentials: true);
+    await _performLoginWithUser(userProfile, saveCredentials: true, dataSource: dataSource);
   }
 
-  Future<void> _performLoginWithUser(UserProfile user, {bool saveCredentials = true}) async {
-    state = state.copyWith(isLoading: true, error: null);
+  Future<void> _performLoginWithUser(UserProfile user, {bool saveCredentials = true, DataSourceType dataSource = DataSourceType.https}) async {
+    state = state.copyWith(isLoading: true, error: null, dataSource: dataSource);
 
     try {
       // 1. KIS 인증 서비스 초기화
@@ -102,23 +109,31 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       await _authService!.initialize();
 
-      // 2. WebSocket 연결 시도 - 로그인 완료 조건
-      _webSocketService = KisWebSocketService(_authService!);
-      await _webSocketService!.connect();
+      // 2. 데이터 소스에 따른 연결 설정
+      if (dataSource == DataSourceType.websocket) {
+        // WebSocket 연결 시도 - 로그인 완료 조건
+        _webSocketService = KisWebSocketService(_authService!);
+        await _webSocketService!.connect();
+        print('WebSocket 연결 완료');
+      } else {
+        // HTTPS 방식의 경우 WebSocket 연결 불필요
+        print('HTTPS 방식 선택 - WebSocket 연결 생략');
+      }
 
-      // 3. 인증 + WebSocket 연결 성공 후 사용자 정보 저장
+      // 3. 인증 성공 후 사용자 정보 저장
       if (saveCredentials) {
         await _storageService.saveUserProfile(user);
       } else {
         await _storageService.updateUserLastLogin(user.email);
       }
 
-      // 4. 로그인 완료 상태로 변경 (WebSocket 연결까지 성공)
+      // 4. 로그인 완료 상태로 변경
       state = state.copyWith(
         isLoggedIn: true,
         currentUser: user,
         isLoading: false,
         error: null,
+        dataSource: dataSource,
       );
     } catch (e) {
       // 실패 시 정리
@@ -179,6 +194,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _storageService.clearAllData();
     state = const AuthState();
   }
+  
+  // Public getters는 이미 위에 정의됨
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {

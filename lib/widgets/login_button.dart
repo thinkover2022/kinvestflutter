@@ -87,7 +87,7 @@ class LoginButton extends ConsumerWidget {
               builder: (context, snapshot) {
                 final hasStored = snapshot.data ?? false;
                 if (!hasStored) return const SizedBox.shrink();
-                
+
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -100,7 +100,8 @@ class LoginButton extends ConsumerWidget {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.info, color: Colors.blue.shade700, size: 16),
+                          Icon(Icons.info,
+                              color: Colors.blue.shade700, size: 16),
                           const SizedBox(width: 8),
                           Text(
                             '로그아웃 옵션',
@@ -146,16 +147,19 @@ class LoginButton extends ConsumerWidget {
                     );
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: const Text('로그아웃', style: TextStyle(color: Colors.white)),
+                  child:
+                      const Text('로그아웃', style: TextStyle(color: Colors.white)),
                 );
               }
-              
+
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextButton(
                     onPressed: () {
-                      ref.read(authProvider.notifier).logout(clearStoredCredentials: false);
+                      ref
+                          .read(authProvider.notifier)
+                          .logout(clearStoredCredentials: false);
                       Navigator.of(context).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -169,7 +173,9 @@ class LoginButton extends ConsumerWidget {
                   const SizedBox(width: 8),
                   ElevatedButton(
                     onPressed: () {
-                      ref.read(authProvider.notifier).logout(clearStoredCredentials: true);
+                      ref
+                          .read(authProvider.notifier)
+                          .logout(clearStoredCredentials: true);
                       Navigator.of(context).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -178,8 +184,10 @@ class LoginButton extends ConsumerWidget {
                         ),
                       );
                     },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                    child: const Text('계정 삭제', style: TextStyle(color: Colors.white)),
+                    style:
+                        ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    child: const Text('계정 삭제',
+                        style: TextStyle(color: Colors.white)),
                   ),
                 ],
               );
@@ -193,7 +201,7 @@ class LoginButton extends ConsumerWidget {
   void _showAccountInfo(BuildContext context, AuthState authState) {
     final user = authState.currentUser;
     if (user == null) return;
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -209,6 +217,8 @@ class LoginButton extends ConsumerWidget {
             _buildInfoRow('App Secret', user.maskedAppSecret),
             const SizedBox(height: 8),
             _buildInfoRow('계좌 유형', user.accountType),
+            const SizedBox(height: 8),
+            _buildInfoRow('데이터 소스', user.dataSourceDisplayName),
             const SizedBox(height: 8),
             _buildInfoRow('가입일', _formatDate(user.createdAt)),
             const SizedBox(height: 8),
@@ -245,6 +255,6 @@ class LoginButton extends ConsumerWidget {
 
   String _formatDate(DateTime dateTime) {
     return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} '
-           '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }

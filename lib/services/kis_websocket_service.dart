@@ -84,6 +84,10 @@ class KisWebSocketService {
         throw Exception('AuthService not initialized. Call authService.initialize() first.');
       }
 
+      print('WebSocket 연결 시도 중: $_wsUrl');
+      print('승인키: ${_authService.approvalKey}');
+      print('실제 계정: ${_authService.isRealAccount}');
+
       _channel = WebSocketChannel.connect(Uri.parse(_wsUrl));
       _isConnected = true;
 
@@ -96,6 +100,7 @@ class KisWebSocketService {
       print('WebSocket connected to $_wsUrl');
     } catch (e) {
       _isConnected = false;
+      print('WebSocket 연결 실패: $e');
       throw Exception('Failed to connect WebSocket: $e');
     }
   }
@@ -147,7 +152,15 @@ class KisWebSocketService {
   }
 
   Future<void> _subscribe(KisWebSocketRequestType type, String key) async {
-    if (!_isConnected) throw Exception('WebSocket not connected');
+    if (!_isConnected) {
+      print('WebSocket 연결되지 않음 - 구독 실패');
+      throw Exception('WebSocket not connected');
+    }
+
+    if (_authService.approvalKey == null || _authService.approvalKey!.isEmpty) {
+      print('승인키가 없음 - 구독 실패');
+      throw Exception('Approval key is null or empty');
+    }
 
     final message = _createSubscriptionMessage(type, key, '1');
     print('구독 메시지 전송: ${type.code} for $key');
@@ -187,7 +200,7 @@ class KisWebSocketService {
   void _onMessage(dynamic message) {
     try {
       final data = message.toString();
-      print('WebSocket 메시지 수신: ${data.length > 100 ? data.substring(0, 100) + "..." : data}');
+      print('WebSocket 메시지 수신: ${data.length > 100 ? "${data.substring(0, 100)}..." : data}');
 
       if (data.startsWith('0') || data.startsWith('1')) {
         _handleRealtimeData(data);
@@ -212,30 +225,52 @@ class KisWebSocketService {
     final payload = parts[3];
 
     print('실시간 데이터 처리: flag=$flag, trId=$trId, dataCount=$dataCount');
+    print('페이로드 길이: ${payload.length}');
 
     try {
       if (flag == '0') {
         switch (trId) {
           case 'H0STASP0':
             print('국내 주식 호가 데이터 수신: trId=$trId');
-            final quote = DomesticStockQuote.fromWebSocketData(payload);
-            print('파싱된 호가 데이터: ${quote.stockCode}');
-            _domesticQuoteController?.add(quote);
+            print('호가 데이터 페이로드: ${payload.length > 100 ? "${payload.substring(0, 100)}..." : payload}');
+            try {
+              final quote = DomesticStockQuote.fromWebSocketData(payload);
+              print('파싱된 호가 데이터: ${quote.stockCode}');
+              _domesticQuoteController?.add(quote);
+            } catch (e) {
+              print('호가 데이터 파싱 실패: $e');
+            }
             break;
           case 'H0STCNT0':
             print('국내 주식 체결 데이터 수신: trId=$trId');
-            final execution = DomesticStockExecution.fromWebSocketData(payload);
-            print('파싱된 체결 데이터: ${execution.stockCode} - ${execution.currentPrice}');
-            _domesticExecutionController?.add(execution);
+            print('체결 데이터 페이로드: ${payload.length > 100 ? "${payload.substring(0, 100)}..." : payload}');
+            try {
+              final execution = DomesticStockExecution.fromWebSocketData(payload);
+              print('파싱된 체결 데이터: ${execution.stockCode} - ${execution.currentPrice}');
+              _domesticExecutionController?.add(execution);
+            } catch (e) {
+              print('체결 데이터 파싱 실패: $e');
+            }
             break;
           case 'HDFSASP0':
           case 'HDFSASP1':
-            final quote = OverseasStockQuote.fromWebSocketData(payload);
-            _overseasQuoteController?.add(quote);
+            try {
+              final quote = OverseasStockQuote.fromWebSocketData(payload);
+              _overseasQuoteController?.add(quote);
+            } catch (e) {
+              print('해외 호가 데이터 파싱 실패: $e');
+            }
             break;
           case 'HDFSCNT0':
-            final execution = OverseasStockExecution.fromWebSocketData(payload);
-            _overseasExecutionController?.add(execution);
+            try {
+              final execution = OverseasStockExecution.fromWebSocketData(payload);
+              _overseasExecutionController?.add(execution);
+            } catch (e) {
+              print('해외 체결 데이터 파싱 실패: $e');
+            }
+            break;
+          default:
+            print('알 수 없는 TR ID: $trId');
             break;
         }
       } else if (flag == '1') {
@@ -258,6 +293,7 @@ class KisWebSocketService {
       }
     } catch (e) {
       print('Error parsing realtime data: $e');
+      print('Raw data: $data');
     }
   }
 

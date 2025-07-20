@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/stock_data_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/login_button.dart';
+import '../widgets/login_settings_dialog.dart';
+import '../services/kis_quote_service.dart';
 import 'domestic_stocks_screen.dart';
 import 'overseas_stocks_screen.dart';
 import 'orders_screen.dart';
@@ -41,32 +43,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _initializeConnection() async {
-    final isLoggedIn = ref.read(isLoggedInProvider);
-    if (!isLoggedIn) {
+    final authState = ref.read(authProvider);
+    if (!authState.isLoggedIn) {
       setState(() {
         _isInitialized = false;
       });
       return;
     }
 
-    // AuthProvider에서 이미 WebSocket 연결 완료되었으므로
-    // StockDataProvider에 WebSocket 서비스 설정
+    // AuthProvider에서 데이터 소스에 따른 서비스 설정
     final authNotifier = ref.read(authProvider.notifier);
-    final webSocketService = authNotifier.webSocketService;
+    final dataSource = authState.dataSource;
     
-    if (webSocketService != null) {
-      ref.read(stockDataProvider.notifier).setWebSocketService(webSocketService);
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
+    if (dataSource == DataSourceType.websocket) {
+      final webSocketService = authNotifier.webSocketService;
+      if (webSocketService != null) {
+        ref.read(stockDataProvider.notifier).setServices(
+          webSocketService: webSocketService,
+          dataSource: dataSource,
+        );
+        print('WebSocket 서비스 설정 완료');
       }
     } else {
-      if (mounted) {
-        setState(() {
-          _isInitialized = false;
-        });
+      // HTTPS 방식
+      final authService = authNotifier.authService;
+      if (authService != null) {
+        final quoteService = KisQuoteService(authService);
+        ref.read(stockDataProvider.notifier).setServices(
+          quoteService: quoteService,
+          dataSource: dataSource,
+        );
+        print('HTTPS 서비스 설정 완료');
       }
+    }
+    
+    if (mounted) {
+      setState(() {
+        _isInitialized = true;
+      });
     }
   }
 
@@ -75,6 +89,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isLoggedIn = ref.watch(isLoggedInProvider);
     final isConnected = ref.watch(connectionStatusProvider);
     final connectionError = ref.watch(connectionErrorProvider);
+    final stockData = ref.watch(stockDataProvider);
 
     // 로그인 상태 변화 감지
     ref.listen<bool>(isLoggedInProvider, (previous, next) {
@@ -90,7 +105,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('KInvest Flutter'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('KInvest Flutter'),
+            if (isLoggedIn)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    stockData.marketStatusText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: stockData.isMarketOpen ? Colors.green : Colors.orange,
+                    ),
+                  ),
+                  Text(
+                    ref.watch(authProvider).dataSource.displayName,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           if (isLoggedIn)

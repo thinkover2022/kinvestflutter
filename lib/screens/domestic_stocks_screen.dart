@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/stock_data_provider.dart';
 import '../widgets/add_stock_dialog.dart';
+import '../widgets/kospi_stock_list_dialog.dart';
+import '../data/kospi_stocks.dart';
 
 class DomesticStocksScreen extends ConsumerStatefulWidget {
   const DomesticStocksScreen({super.key});
@@ -12,23 +14,10 @@ class DomesticStocksScreen extends ConsumerStatefulWidget {
 }
 
 class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
-  // 인기 한국 주식 종목 코드들
+  // 기본 한국 주식 종목 코드들
   final List<Map<String, String>> _defaultStocks = [
     {'code': '005930', 'name': '삼성전자'},
     {'code': '000660', 'name': 'SK하이닉스'},
-    {'code': '035420', 'name': 'NAVER'},
-    {'code': '051910', 'name': 'LG화학'},
-    {'code': '006400', 'name': '삼성SDI'},
-    {'code': '035720', 'name': '카카오'},
-    {'code': '028260', 'name': '삼성물산'},
-    {'code': '066570', 'name': 'LG전자'},
-    {'code': '096770', 'name': 'SK이노베이션'},
-    {'code': '207940', 'name': '삼성바이오로직스'},
-    {'code': '068270', 'name': 'Celltrion'},
-    {'code': '323410', 'name': '카카오뱅크'},
-    {'code': '003670', 'name': '포스코홀딩스'},
-    {'code': '000270', 'name': '기아'},
-    {'code': '105560', 'name': 'KB금융'},
   ];
 
   @override
@@ -47,10 +36,10 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
     print('WebSocket 연결 상태: ${stockData.isConnected}');
     
     if (stockData.subscribedDomesticStocks.isEmpty) {
-      print('구독할 기본 종목들: ${_defaultStocks.take(5).map((s) => s['code']).toList()}');
+      print('구독할 기본 종목들: ${_defaultStocks.map((s) => s['code']).toList()}');
       
-      // 처음 5개 종목만 자동 구독
-      for (int i = 0; i < 5 && i < _defaultStocks.length; i++) {
+      // 기본 종목들 자동 구독
+      for (int i = 0; i < _defaultStocks.length; i++) {
         try {
           final stockCode = _defaultStocks[i]['code']!;
           print('종목 구독 시도: $stockCode');
@@ -68,24 +57,7 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
       final updatedData = ref.read(stockDataProvider);
       print('구독된 종목들: ${updatedData.subscribedDomesticStocks.toList()}');
       print('연결 상태: ${updatedData.isConnected}');
-      
-      // 장 시간 외일 때 테스트용 모의 데이터 추가
-      await _addMockDataForTesting();
     }
-  }
-  
-  Future<void> _addMockDataForTesting() async {
-    print('장 시간 외 - 테스트용 모의 데이터 추가');
-    
-    // 3초 후 모의 데이터 추가 (실제 데이터 수신을 시뮬레이션)
-    Future.delayed(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      
-      print('모의 데이터 생성 시작');
-      
-      // StockDataProvider의 addMockData 메서드 호출
-      ref.read(stockDataProvider.notifier).addMockData();
-    });
   }
 
   @override
@@ -134,15 +106,24 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
                       final quote = domesticQuotes[stockCode];
                       final execution = domesticExecutions[stockCode];
                       
-                      // 종목 이름 찾기
-                      final stockInfo = _defaultStocks.firstWhere(
+                      // 종목 이름 찾기 (한국 주식 데이터에서 우선 검색)
+                      final koreanStock = KoreanStockData.stocks.firstWhere(
+                        (stock) => stock.code == stockCode,
+                        orElse: () => KoreanStock(code: stockCode, name: stockCode, sector: '', marketCap: '', market: ''),
+                      );
+                      
+                      // 기본 종목 리스트에서도 확인
+                      final defaultStock = _defaultStocks.firstWhere(
                         (stock) => stock['code'] == stockCode,
                         orElse: () => {'code': stockCode, 'name': stockCode},
                       );
+                      
+                      // 한국 주식 데이터를 우선 사용
+                      final stockName = koreanStock.name != stockCode ? koreanStock.name : defaultStock['name']!;
 
                       return DomesticStockQuoteCard(
                         stockCode: stockCode,
-                        stockName: stockInfo['name']!,
+                        stockName: stockName,
                         quote: quote,
                         execution: execution,
                         onRemove: () async {
@@ -156,40 +137,89 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final stockCode = await showDialog<String>(
-            context: context,
-            builder: (context) => const AddStockDialog(
-              title: '국내주식 추가',
-              hintText: '종목코드 입력 (예: 005930)',
-            ),
-          );
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // KOSPI 종목 리스트에서 선택
+          FloatingActionButton(
+            heroTag: "kospi_list",
+            onPressed: () async {
+              final stockCode = await showDialog<String>(
+                context: context,
+                builder: (context) => const KoreanStockListDialog(),
+              );
 
-          if (stockCode != null && stockCode.isNotEmpty) {
-            try {
-              await ref
-                  .read(stockDataProvider.notifier)
-                  .subscribeDomesticStock(stockCode);
+              if (stockCode != null && stockCode.isNotEmpty) {
+                try {
+                  await ref
+                      .read(stockDataProvider.notifier)
+                      .subscribeDomesticStock(stockCode);
 
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$stockCode 종목이 추가되었습니다')),
-                );
+                  if (context.mounted) {
+                    // 종목 이름 찾기
+                    final stock = KoreanStockData.stocks.firstWhere(
+                      (s) => s.code == stockCode,
+                      orElse: () => KoreanStock(code: stockCode, name: stockCode, sector: '', marketCap: '', market: ''),
+                    );
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${stock.name}($stockCode) 종목이 추가되었습니다')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('종목 추가 실패: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               }
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('종목 추가 실패: ${e.toString()}'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
+            },
+            child: const Icon(Icons.list),
+          ),
+          const SizedBox(height: 16),
+          
+          // 직접 종목코드 입력
+          FloatingActionButton(
+            heroTag: "direct_input",
+            onPressed: () async {
+              final stockCode = await showDialog<String>(
+                context: context,
+                builder: (context) => const AddStockDialog(
+                  title: '국내주식 추가',
+                  hintText: '종목코드 입력 (예: 005930)',
+                ),
+              );
+
+              if (stockCode != null && stockCode.isNotEmpty) {
+                try {
+                  await ref
+                      .read(stockDataProvider.notifier)
+                      .subscribeDomesticStock(stockCode);
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('$stockCode 종목이 추가되었습니다')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('종목 추가 실패: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               }
-            }
-          }
-        },
-        child: const Icon(Icons.add),
+            },
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }

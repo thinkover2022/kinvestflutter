@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_profile.dart';
+import '../widgets/login_settings_dialog.dart';
 
 class StorageService {
   static const String _keyUserProfiles = 'user_profiles';
@@ -202,6 +203,7 @@ class StorageService {
       appKey: appKey,
       appSecret: appSecret,
       isRealAccount: isRealAccount,
+      dataSource: DataSourceType.https, // 기본값으로 HTTPS 사용
       createdAt: DateTime.now(),
       lastLoginAt: DateTime.now(),
     );

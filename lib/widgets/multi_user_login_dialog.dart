@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../models/user_profile.dart';
+import 'login_settings_dialog.dart';
 
 class MultiUserLoginDialog extends ConsumerStatefulWidget {
   const MultiUserLoginDialog({super.key});
@@ -14,12 +15,6 @@ class MultiUserLoginDialog extends ConsumerStatefulWidget {
 class _MultiUserLoginDialogState extends ConsumerState<MultiUserLoginDialog>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _appKeyController = TextEditingController();
-  final _appSecretController = TextEditingController();
-  bool _isRealAccount = false;
-  bool _obscureSecret = true;
 
   List<UserProfile> _storedUsers = [];
   UserProfile? _selectedUser;
@@ -34,9 +29,6 @@ class _MultiUserLoginDialogState extends ConsumerState<MultiUserLoginDialog>
   @override
   void dispose() {
     _tabController.dispose();
-    _emailController.dispose();
-    _appKeyController.dispose();
-    _appSecretController.dispose();
     super.dispose();
   }
 
@@ -159,6 +151,10 @@ class _MultiUserLoginDialogState extends ConsumerState<MultiUserLoginDialog>
                     children: [
                       Text(user.accountType),
                       Text(
+                        '데이터 소스: ${user.dataSourceDisplayName}',
+                        style: const TextStyle(fontSize: 12, color: Colors.blue),
+                      ),
+                      Text(
                         '마지막 로그인: ${_formatDateTime(user.lastLoginAt)}',
                         style: const TextStyle(fontSize: 12),
                       ),
@@ -228,130 +224,103 @@ class _MultiUserLoginDialogState extends ConsumerState<MultiUserLoginDialog>
   }
 
   Widget _buildNewUserTab(AuthState authState) {
-    return Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: '이메일',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.email),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return '이메일을 입력해주세요';
-                      }
-                      if (!value.contains('@')) {
-                        return '올바른 이메일 형식을 입력해주세요';
-                      }
-                      return null;
-                    },
-                  ),
+                  const SizedBox(height: 32),
+                  const Icon(Icons.person_add, size: 64, color: Colors.grey),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _appKeyController,
-                    decoration: const InputDecoration(
-                      labelText: 'App Key',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.key),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'App Key를 입력해주세요';
-                      }
-                      return null;
-                    },
+                  const Text(
+                    '새 계정으로 로그인',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _appSecretController,
-                    decoration: InputDecoration(
-                      labelText: 'App Secret',
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.lock),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscureSecret
-                              ? Icons.visibility
-                              : Icons.visibility_off,
+                  const SizedBox(height: 8),
+                  const Text(
+                    '아래 버튼을 클릭하여 새 계정 정보를 입력하고\n데이터 소스를 선택하세요',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade300),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.info, color: Colors.blue.shade700),
+                        const SizedBox(height: 8),
+                        Text(
+                          '데이터 소스 선택',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade700,
+                          ),
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscureSecret = !_obscureSecret;
-                          });
-                        },
-                      ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'WebSocket: 실시간 데이터 (빠름)\nHTTPS: 30초마다 업데이트 (안정적)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue.shade600,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
-                    obscureText: _obscureSecret,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'App Secret을 입력해주세요';
-                      }
-                      return null;
-                    },
                   ),
-                  const SizedBox(height: 16),
-                  SwitchListTile(
-                    title: const Text('실전투자계좌'),
-                    subtitle:
-                        Text(_isRealAccount ? '실전투자계좌로 연결' : '모의투자계좌로 연결'),
-                    value: _isRealAccount,
-                    onChanged: (value) {
-                      setState(() {
-                        _isRealAccount = value;
-                      });
-                    },
-                  ),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),
           ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: authState.isLoading ? null : _loginWithNewCredentials,
+            child: authState.isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('새 계정으로 로그인'),
+          ),
+        ),
+        if (authState.error != null) ...[
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: authState.isLoading ? null : _loginWithNewCredentials,
-              child: authState.isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('새 계정으로 로그인'),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.error, color: Colors.red.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '로그인 실패: ${authState.error}',
+                    style: TextStyle(color: Colors.red.shade700),
+                  ),
+                ),
+              ],
             ),
           ),
-          if (authState.error != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.shade300),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.error, color: Colors.red.shade700),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '로그인 실패: ${authState.error}',
-                      style: TextStyle(color: Colors.red.shade700),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
-      ),
+      ],
     );
   }
 
@@ -379,34 +348,39 @@ class _MultiUserLoginDialogState extends ConsumerState<MultiUserLoginDialog>
   }
 
   Future<void> _loginWithNewCredentials() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => const LoginSettingsDialog(),
+    );
 
-    final navigator = Navigator.of(context);
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final email = _emailController.text.trim();
-    final accountType = _isRealAccount ? "실전" : "모의";
+    if (result != null && mounted) {
+      final navigator = Navigator.of(context);
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
+      final email = result['email'] as String;
+      final accountType = result['isRealAccount'] as bool ? "실전" : "모의";
+      final dataSource = result['dataSource'] as DataSourceType;
 
-    try {
-      await ref.read(authProvider.notifier).loginWithCredentials(
-            email: email,
-            appKey: _appKeyController.text.trim(),
-            appSecret: _appSecretController.text.trim(),
-            isRealAccount: _isRealAccount,
+      try {
+        await ref.read(authProvider.notifier).loginWithCredentials(
+              email: email,
+              appKey: result['appKey'] as String,
+              appSecret: result['appSecret'] as String,
+              isRealAccount: result['isRealAccount'] as bool,
+              dataSource: dataSource,
+            );
+
+        if (mounted) {
+          navigator.pop(true);
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text('$email로 로그인되었습니다 ($accountType투자계좌, ${dataSource.displayName})'),
+              backgroundColor: Colors.green,
+            ),
           );
-
-      if (mounted) {
-        navigator.pop(true);
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text('$email로 로그인되었습니다 ($accountType투자계좌)'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        }
+      } catch (e) {
+        // 에러는 AuthNotifier에서 처리됨
       }
-    } catch (e) {
-      // 에러는 AuthNotifier에서 처리됨
     }
   }
 
@@ -431,12 +405,14 @@ class _MultiUserLoginDialogState extends ConsumerState<MultiUserLoginDialog>
               if (mounted) {
                 navigator.pop();
                 await _loadStoredUsers();
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(
-                    content: Text('$userEmail 사용자가 삭제되었습니다'),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
+                if (mounted) {
+                  scaffoldMessenger.showSnackBar(
+                    SnackBar(
+                      content: Text('$userEmail 사용자가 삭제되었습니다'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
