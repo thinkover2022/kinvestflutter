@@ -121,7 +121,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                   Text(
-                    ref.watch(authProvider).dataSource.displayName,
+                    ref.watch(authProvider).dataSource.getContextualDisplayName(),
                     style: TextStyle(
                       fontSize: 10,
                       color: Colors.grey.shade600,

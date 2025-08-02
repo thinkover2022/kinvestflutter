@@ -18,9 +18,12 @@ class KisQuoteService {
     }
 
     final url = Uri.parse('$_baseUrl/uapi/domestic-stock/v1/quotations/inquire-price');
+    // REST API 호출 시에는 Access Token 사용
+    final accessToken = await _authService.getAccessToken();
+    
     final headers = {
       'Content-Type': 'application/json; charset=utf-8',
-      'authorization': 'Bearer ${_authService.approvalKey}',
+      'authorization': 'Bearer $accessToken',
       'appkey': _authService.appKey,
       'appsecret': _authService.appSecret,
       'tr_id': 'FHKST01010100',
@@ -54,8 +57,22 @@ class KisQuoteService {
           // API 응답을 DomesticStockExecution 모델로 변환
           return _convertToDomesticStockExecution(stockCode, output);
         } else {
+          // 토큰 관련 오류 체크
+          if (responseData['msg_cd'] == 'EGW00121' || responseData['msg1']?.contains('token') == true) {
+            print('토큰 오류 감지, 토큰 갱신 후 재시도: ${responseData['msg1']}');
+            // 토큰 초기화하여 다음 호출 시 새로 발급받도록 함
+            _authService.clearAuthentication();
+            await _authService.initialize();
+            throw Exception('토큰 만료 - 재시도 필요: ${responseData['msg1']}');
+          }
           throw Exception('API 오류: ${responseData['msg1']}');
         }
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        // 인증 오류 시 토큰 갱신
+        print('인증 오류 감지, 토큰 갱신 중...');
+        _authService.clearAuthentication();
+        await _authService.initialize();
+        throw Exception('인증 오류 - 토큰 갱신 필요');
       } else {
         print('HTTP 오류 응답 바디: ${response.body}');
         throw Exception('HTTP 오류: ${response.statusCode}');
@@ -93,9 +110,12 @@ class KisQuoteService {
     }
 
     final url = Uri.parse('$_baseUrl/uapi/domestic-stock/v1/quotations/inquire-asking-price-exp-ccn');
+    // REST API 호출 시에는 Access Token 사용
+    final accessToken = await _authService.getAccessToken();
+    
     final headers = {
       'Content-Type': 'application/json; charset=utf-8',
-      'authorization': 'Bearer ${_authService.approvalKey}',
+      'authorization': 'Bearer $accessToken',
       'appkey': _authService.appKey,
       'appsecret': _authService.appSecret,
       'tr_id': 'FHKST01010200',
@@ -122,9 +142,23 @@ class KisQuoteService {
           
           return _convertToDomesticStockQuote(stockCode, output);
         } else {
+          // 토큰 관련 오류 체크
+          if (responseData['msg_cd'] == 'EGW00121' || responseData['msg1']?.contains('token') == true) {
+            print('토큰 오류 감지, 토큰 갱신 후 재시도: ${responseData['msg1']}');
+            _authService.clearAuthentication();
+            await _authService.initialize();
+            throw Exception('토큰 만료 - 재시도 필요: ${responseData['msg1']}');
+          }
           throw Exception('API 오류: ${responseData['msg1']}');
         }
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        // 인증 오류 시 토큰 갱신
+        print('인증 오류 감지, 토큰 갱신 중...');
+        _authService.clearAuthentication();
+        await _authService.initialize();
+        throw Exception('인증 오류 - 토큰 갱신 필요');
       } else {
+        print('HTTP 오류 응답 바디: ${response.body}');
         throw Exception('HTTP 오류: ${response.statusCode}');
       }
     } catch (e) {

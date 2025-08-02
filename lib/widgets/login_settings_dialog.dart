@@ -15,6 +15,43 @@ extension DataSourceTypeExtension on DataSourceType {
     }
   }
   
+  // 시장 상태에 따른 동적 표시 이름
+  String getContextualDisplayName() {
+    final now = DateTime.now();
+    
+    switch (this) {
+      case DataSourceType.websocket:
+        // WebSocket은 장 운영 시간(09:00-15:30)에만 사용
+        return 'WebSocket (장중 실시간)';
+        
+      case DataSourceType.https:
+        // 주말 체크
+        if (now.weekday == DateTime.saturday || now.weekday == DateTime.sunday) {
+          return 'HTTPS (주말)';
+        }
+        
+        // 평일의 경우 시간대별 구분
+        if (now.hour < 9 || (now.hour == 8 && now.minute >= 30)) {
+          // 08:30-09:00: 장전 시간외
+          if (now.hour == 8 && now.minute >= 30) {
+            return 'HTTPS (장전 시간외)';
+          }
+          // 18:00-08:30: 장마감
+          return 'HTTPS (장마감)';
+        } else if (now.hour > 15 || (now.hour == 15 && now.minute >= 30)) {
+          // 15:30-18:00: 장후 시간외 또는 장마감
+          if (now.hour < 18) {
+            return 'HTTPS (장후 시간외)';
+          } else {
+            return 'HTTPS (장마감)';
+          }
+        } else {
+          // 이 경우는 발생하면 안 됨 (09:00-15:30은 WebSocket이어야 함)
+          return 'HTTPS (주기적 조회)';
+        }
+    }
+  }
+  
   String get description {
     switch (this) {
       case DataSourceType.websocket:
@@ -30,7 +67,6 @@ class LoginSettingsDialog extends StatefulWidget {
   final String? initialAppKey;
   final String? initialAppSecret;
   final bool initialIsRealAccount;
-  final DataSourceType initialDataSource;
 
   const LoginSettingsDialog({
     super.key,
@@ -38,7 +74,6 @@ class LoginSettingsDialog extends StatefulWidget {
     this.initialAppKey,
     this.initialAppSecret,
     this.initialIsRealAccount = true,
-    this.initialDataSource = DataSourceType.https,
   });
 
   @override
@@ -52,7 +87,6 @@ class _LoginSettingsDialogState extends State<LoginSettingsDialog> {
   final _appSecretController = TextEditingController();
   
   bool _isRealAccount = true;
-  DataSourceType _dataSource = DataSourceType.https;
   bool _obscureAppKey = true;
   bool _obscureAppSecret = true;
 
@@ -63,7 +97,6 @@ class _LoginSettingsDialogState extends State<LoginSettingsDialog> {
     _appKeyController.text = widget.initialAppKey ?? '';
     _appSecretController.text = widget.initialAppSecret ?? '';
     _isRealAccount = widget.initialIsRealAccount;
-    _dataSource = widget.initialDataSource;
   }
 
   @override
@@ -228,44 +261,12 @@ class _LoginSettingsDialogState extends State<LoginSettingsDialog> {
                 ),
                 const SizedBox(height: 24),
 
-                // 데이터 소스 선택
-                const Text(
-                  '데이터 소스',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    children: DataSourceType.values.map((type) {
-                      return RadioListTile<DataSourceType>(
-                        title: Text(type.displayName),
-                        subtitle: Text(
-                          type.description,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        value: type,
-                        groupValue: _dataSource,
-                        onChanged: (value) {
-                          setState(() {
-                            _dataSource = value!;
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // 안내 메시지
+                // 데이터 소스 자동 선택 안내
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    border: Border.all(color: Colors.blue.shade300),
+                    color: Colors.green.shade50,
+                    border: Border.all(color: Colors.green.shade300),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
@@ -273,24 +274,23 @@ class _LoginSettingsDialogState extends State<LoginSettingsDialog> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.info, color: Colors.blue.shade700),
+                          Icon(Icons.auto_mode, color: Colors.green.shade700),
                           const SizedBox(width: 8),
                           Text(
-                            '데이터 소스 선택 안내',
+                            '자동 데이터 소스 선택',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: Colors.blue.shade700,
+                              color: Colors.green.shade700,
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        '• WebSocket: 실시간 스트리밍, 장시간 중 즉시 업데이트\n'
-                        '• HTTPS: 주기적 조회, 장시간 외에도 데이터 확인 가능\n'
-                        '• 실시간성이 중요하면 WebSocket 선택\n'
-                        '• 안정성이 중요하면 HTTPS 선택',
-                        style: TextStyle(fontSize: 12),
+                        '• 장중 시간(08:30-18:00): WebSocket 실시간 데이터 스트리밍\n'
+                        '• 장마감 시간(18:00-08:30): HTTPS 주기적 데이터 조회\n'
+                        '• 시간에 따라 자동으로 최적의 데이터 소스를 선택합니다',
+                        style: TextStyle(fontSize: 13),
                       ),
                     ],
                   ),
@@ -314,7 +314,6 @@ class _LoginSettingsDialogState extends State<LoginSettingsDialog> {
                             'appKey': _appKeyController.text,
                             'appSecret': _appSecretController.text,
                             'isRealAccount': _isRealAccount,
-                            'dataSource': _dataSource,
                           });
                         }
                       },

@@ -151,7 +151,7 @@ class _MultiUserLoginDialogState extends ConsumerState<MultiUserLoginDialog>
                     children: [
                       Text(user.accountType),
                       Text(
-                        '데이터 소스: ${user.dataSourceDisplayName}',
+                        '데이터 소스: ${user.dataSource.getContextualDisplayName()}',
                         style: const TextStyle(fontSize: 12, color: Colors.blue),
                       ),
                       Text(
@@ -358,7 +358,6 @@ class _MultiUserLoginDialogState extends ConsumerState<MultiUserLoginDialog>
       final scaffoldMessenger = ScaffoldMessenger.of(context);
       final email = result['email'] as String;
       final accountType = result['isRealAccount'] as bool ? "실전" : "모의";
-      final dataSource = result['dataSource'] as DataSourceType;
 
       try {
         await ref.read(authProvider.notifier).loginWithCredentials(
@@ -366,14 +365,13 @@ class _MultiUserLoginDialogState extends ConsumerState<MultiUserLoginDialog>
               appKey: result['appKey'] as String,
               appSecret: result['appSecret'] as String,
               isRealAccount: result['isRealAccount'] as bool,
-              dataSource: dataSource,
             );
 
         if (mounted) {
           navigator.pop(true);
           scaffoldMessenger.showSnackBar(
             SnackBar(
-              content: Text('$email로 로그인되었습니다 ($accountType투자계좌, ${dataSource.displayName})'),
+              content: Text('$email로 로그인되었습니다 ($accountType투자계좌, 자동 데이터 소스)'),
               backgroundColor: Colors.green,
             ),
           );

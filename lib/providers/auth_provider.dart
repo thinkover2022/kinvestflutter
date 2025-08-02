@@ -4,6 +4,7 @@ import '../services/kis_websocket_service.dart';
 import '../services/storage_service.dart';
 import '../models/user_profile.dart';
 import '../widgets/login_settings_dialog.dart';
+import '../utils/market_hours.dart';
 
 class AuthState {
   final bool isLoggedIn;
@@ -59,7 +60,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final lastUser = await _storageService.getLastLoginUser();
       if (lastUser != null) {
-        await _performLoginWithUser(lastUser, saveCredentials: false, dataSource: lastUser.dataSource);
+        // 현재 시간에 맞는 최적 데이터 소스로 업데이트
+        final optimalDataSource = MarketHours.getOptimalDataSource();
+        final updatedUser = lastUser.copyWith(dataSource: optimalDataSource);
+        await _performLoginWithUser(updatedUser, saveCredentials: false, dataSource: optimalDataSource);
       }
     } catch (e) {
       // 자동 로그인 실패 시 저장된 정보 삭제
@@ -70,7 +74,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> loginWithEmail(String email) async {
     final userProfile = await _storageService.getUserProfile(email);
     if (userProfile != null) {
-      await _performLoginWithUser(userProfile, saveCredentials: false, dataSource: userProfile.dataSource);
+      // 현재 시간에 맞는 최적 데이터 소스로 업데이트
+      final optimalDataSource = MarketHours.getOptimalDataSource();
+      final updatedProfile = userProfile.copyWith(dataSource: optimalDataSource);
+      await _performLoginWithUser(updatedProfile, saveCredentials: false, dataSource: optimalDataSource);
     } else {
       throw Exception('사용자 정보를 찾을 수 없습니다');
     }
@@ -81,8 +88,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String appKey,
     required String appSecret,
     required bool isRealAccount,
-    DataSourceType dataSource = DataSourceType.https,
   }) async {
+    // 시장 시간에 따라 자동으로 데이터 소스 선택
+    final dataSource = MarketHours.getOptimalDataSource();
+    
     final userProfile = UserProfile(
       email: email,
       appKey: appKey,

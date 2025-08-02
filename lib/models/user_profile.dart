@@ -83,4 +83,5 @@ class UserProfile {
   String get displayName => email;
   String get accountType => isRealAccount ? '실전계좌' : '모의계좌';
   String get dataSourceDisplayName => dataSource.displayName;
+  String get contextualDataSourceDisplayName => dataSource.getContextualDisplayName();
 }

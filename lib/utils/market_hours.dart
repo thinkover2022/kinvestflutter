@@ -1,3 +1,5 @@
+import '../widgets/login_settings_dialog.dart';
+
 class MarketHours {
   // 한국 주식시장 운영시간 체크 (정규장: 09:00-15:30)
   static bool isMarketOpen() {
@@ -13,6 +15,17 @@ class MarketHours {
     final marketClose = DateTime(now.year, now.month, now.day, 15, 30);
 
     return now.isAfter(marketOpen) && now.isBefore(marketClose);
+  }
+
+  // 최적 데이터 소스 결정 (장 운영 시간에만 WebSocket)
+  static DataSourceType getOptimalDataSource() {
+    // 장 운영 시간(09:00-15:30)에만 WebSocket 사용
+    if (isMarketOpen()) {
+      return DataSourceType.websocket;
+    } else {
+      // 장전/장후/주말에는 모두 HTTPS 사용
+      return DataSourceType.https;
+    }
   }
 
   // KIS API 실시간 데이터 제공 시간 체크 (08:30-18:00)
