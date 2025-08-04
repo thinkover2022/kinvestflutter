@@ -204,6 +204,44 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState();
   }
   
+  // 관심종목 관리 메서드들
+  Future<void> addStockToWatchlist(String stockCode) async {
+    if (state.currentUser == null) return;
+    
+    final currentWatchlist = List<String>.from(state.currentUser!.watchlistStocks);
+    if (!currentWatchlist.contains(stockCode)) {
+      currentWatchlist.add(stockCode);
+      await _updateUserWatchlist(currentWatchlist);
+    }
+  }
+
+  Future<void> removeStockFromWatchlist(String stockCode) async {
+    if (state.currentUser == null) return;
+    
+    final currentWatchlist = List<String>.from(state.currentUser!.watchlistStocks);
+    if (currentWatchlist.contains(stockCode)) {
+      currentWatchlist.remove(stockCode);
+      await _updateUserWatchlist(currentWatchlist);
+    }
+  }
+
+  Future<void> _updateUserWatchlist(List<String> newWatchlist) async {
+    if (state.currentUser == null) return;
+    
+    final updatedUser = state.currentUser!.copyWith(watchlistStocks: newWatchlist);
+    await _storageService.saveUserProfile(updatedUser);
+    
+    state = state.copyWith(currentUser: updatedUser);
+  }
+
+  List<String> getUserWatchlist() {
+    return state.currentUser?.watchlistStocks ?? [];
+  }
+
+  bool isStockInWatchlist(String stockCode) {
+    return state.currentUser?.watchlistStocks.contains(stockCode) ?? false;
+  }
+  
   // Public getters는 이미 위에 정의됨
 }
 

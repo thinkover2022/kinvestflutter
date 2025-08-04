@@ -8,6 +8,7 @@ class UserProfile {
   final DataSourceType dataSource;
   final DateTime createdAt;
   final DateTime lastLoginAt;
+  final List<String> watchlistStocks; // 관심종목 리스트
 
   UserProfile({
     required this.email,
@@ -17,6 +18,7 @@ class UserProfile {
     required this.dataSource,
     required this.createdAt,
     required this.lastLoginAt,
+    this.watchlistStocks = const [], // 기본값: 빈 리스트
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -31,6 +33,7 @@ class UserProfile {
       ),
       createdAt: DateTime.parse(json['createdAt'] as String),
       lastLoginAt: DateTime.parse(json['lastLoginAt'] as String),
+      watchlistStocks: List<String>.from(json['watchlistStocks'] as List? ?? []),
     );
   }
 
@@ -43,6 +46,7 @@ class UserProfile {
       'dataSource': dataSource.name,
       'createdAt': createdAt.toIso8601String(),
       'lastLoginAt': lastLoginAt.toIso8601String(),
+      'watchlistStocks': watchlistStocks,
     };
   }
 
@@ -54,6 +58,7 @@ class UserProfile {
     DataSourceType? dataSource,
     DateTime? createdAt,
     DateTime? lastLoginAt,
+    List<String>? watchlistStocks,
   }) {
     return UserProfile(
       email: email ?? this.email,
@@ -63,6 +68,7 @@ class UserProfile {
       dataSource: dataSource ?? this.dataSource,
       createdAt: createdAt ?? this.createdAt,
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
+      watchlistStocks: watchlistStocks ?? this.watchlistStocks,
     );
   }
 

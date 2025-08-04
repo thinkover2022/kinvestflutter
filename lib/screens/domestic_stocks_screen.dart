@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/stock_data_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/add_stock_dialog.dart';
 import '../widgets/kospi_stock_list_dialog.dart';
 import '../data/kospi_stocks.dart';
@@ -14,34 +15,33 @@ class DomesticStocksScreen extends ConsumerStatefulWidget {
 }
 
 class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
-  // 기본 한국 주식 종목 코드들
-  final List<Map<String, String>> _defaultStocks = [
-    {'code': '005930', 'name': '삼성전자'},
-    {'code': '000660', 'name': 'SK하이닉스'},
-  ];
+  // 기본 종목 제거 - 사용자 관심종목으로 대체
 
   @override
   void initState() {
     super.initState();
-    // 로그인 후 기본 종목들을 자동으로 구독
+    // 로그인 후 사용자 관심종목들을 자동으로 구독
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _subscribeDefaultStocks();
+      _subscribeUserWatchlistStocks();
     });
   }
 
-  Future<void> _subscribeDefaultStocks() async {
-    print('_subscribeDefaultStocks 호출됨');
+  Future<void> _subscribeUserWatchlistStocks() async {
+    print('_subscribeUserWatchlistStocks 호출됨');
     final stockData = ref.read(stockDataProvider);
+    final authNotifier = ref.read(authProvider.notifier);
+    final userWatchlist = authNotifier.getUserWatchlist();
+    
+    print('사용자 관심종목: $userWatchlist');
     print('현재 구독된 종목 수: ${stockData.subscribedDomesticStocks.length}');
     print('WebSocket 연결 상태: ${stockData.isConnected}');
     
-    if (stockData.subscribedDomesticStocks.isEmpty) {
-      print('구독할 기본 종목들: ${_defaultStocks.map((s) => s['code']).toList()}');
+    if (userWatchlist.isNotEmpty) {
+      print('구독할 사용자 관심종목들: $userWatchlist');
       
-      // 기본 종목들 자동 구독
-      for (int i = 0; i < _defaultStocks.length; i++) {
+      // 사용자 관심종목들 자동 구독
+      for (final stockCode in userWatchlist) {
         try {
-          final stockCode = _defaultStocks[i]['code']!;
           print('종목 구독 시도: $stockCode');
           
           await ref.read(stockDataProvider.notifier)
@@ -49,7 +49,7 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
               
           print('종목 구독 성공: $stockCode');
         } catch (e) {
-          print('종목 구독 실패: ${_defaultStocks[i]['code']} - $e');
+          print('종목 구독 실패: $stockCode - $e');
         }
       }
       
@@ -57,6 +57,8 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
       final updatedData = ref.read(stockDataProvider);
       print('구독된 종목들: ${updatedData.subscribedDomesticStocks.toList()}');
       print('연결 상태: ${updatedData.isConnected}');
+    } else {
+      print('사용자 관심종목이 없습니다. 종목을 추가해주세요.');
     }
   }
 
@@ -112,14 +114,8 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
                         orElse: () => KoreanStock(code: stockCode, name: stockCode, sector: '', marketCap: '', market: ''),
                       );
                       
-                      // 기본 종목 리스트에서도 확인
-                      final defaultStock = _defaultStocks.firstWhere(
-                        (stock) => stock['code'] == stockCode,
-                        orElse: () => {'code': stockCode, 'name': stockCode},
-                      );
-                      
-                      // 한국 주식 데이터를 우선 사용
-                      final stockName = koreanStock.name != stockCode ? koreanStock.name : defaultStock['name']!;
+                      // 종목 이름은 한국 주식 데이터를 사용하고, 없으면 종목코드 사용
+                      final stockName = koreanStock.name != stockCode ? koreanStock.name : stockCode;
 
                       return DomesticStockQuoteCard(
                         stockCode: stockCode,
@@ -127,9 +123,15 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
                         quote: quote,
                         execution: execution,
                         onRemove: () async {
+                          // 실시간 구독 해제
                           await ref
                               .read(stockDataProvider.notifier)
                               .unsubscribeDomesticStock(stockCode);
+                          
+                          // 사용자 관심종목에서도 제거
+                          await ref
+                              .read(authProvider.notifier)
+                              .removeStockFromWatchlist(stockCode);
                         },
                       );
                     },
@@ -151,9 +153,15 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
 
               if (stockCode != null && stockCode.isNotEmpty) {
                 try {
+                  // 실시간 구독 추가
                   await ref
                       .read(stockDataProvider.notifier)
                       .subscribeDomesticStock(stockCode);
+                  
+                  // 사용자 관심종목에 추가
+                  await ref
+                      .read(authProvider.notifier)
+                      .addStockToWatchlist(stockCode);
 
                   if (context.mounted) {
                     // 종목 이름 찾기
@@ -196,9 +204,15 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen> {
 
               if (stockCode != null && stockCode.isNotEmpty) {
                 try {
+                  // 실시간 구독 추가
                   await ref
                       .read(stockDataProvider.notifier)
                       .subscribeDomesticStock(stockCode);
+                  
+                  // 사용자 관심종목에 추가
+                  await ref
+                      .read(authProvider.notifier)
+                      .addStockToWatchlist(stockCode);
 
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
