@@ -147,7 +147,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       // 실패 시 정리
       await _webSocketService?.disconnect();
-      _authService?.clearAuthentication();
+      await _authService?.clearAuthentication();
       _authService = null;
       _webSocketService = null;
       
