@@ -140,11 +140,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 color: isConnected ? Colors.green : Colors.red,
               ),
               tooltip: isConnected ? '연결됨' : '연결 끊김',
-              onPressed: () {
+              onPressed: () async {
                 if (isConnected) {
+                  // 연결 해제
                   ref.read(stockDataProvider.notifier).disconnect();
                 } else {
-                  _initializeConnection();
+                  // 완전한 재연결을 위해 AuthProvider를 통한 재초기화
+                  final authState = ref.read(authProvider);
+                  if (authState.isLoggedIn && authState.currentUser != null) {
+                    final authNotifier = ref.read(authProvider.notifier);
+                    try {
+                      // 기존 연결 정리
+                      await authNotifier.logout(clearStoredCredentials: false);
+                      // 동일한 사용자로 재로그인
+                      await authNotifier.loginWithEmail(authState.currentUser!.email);
+                      // 연결 초기화
+                      await _initializeConnection();
+                    } catch (e) {
+                      print('재연결 실패: $e');
+                      // 실패 시 원래 방식 시도
+                      _initializeConnection();
+                    }
+                  }
                 }
               },
             ),
