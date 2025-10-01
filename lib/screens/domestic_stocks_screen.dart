@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/stock_data_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/chart_data_provider.dart';
 import '../widgets/add_stock_dialog.dart';
 import '../widgets/kospi_stock_list_dialog.dart';
+import '../widgets/interactive_stock_chart.dart';
 import '../data/kospi_stocks.dart';
 
 class DomesticStocksScreen extends ConsumerStatefulWidget {
@@ -495,30 +497,124 @@ class _DomesticStocksScreenState extends ConsumerState<DomesticStocksScreen>
 
   // 차트 탭
   Widget _buildChartTab() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.show_chart, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          Text(
-            '차트 기능',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade600,
+    if (_selectedStockCode == null) {
+      return const Center(child: Text('종목을 선택해주세요'));
+    }
+
+    return Consumer(
+      builder: (context, ref, child) {
+        final chartDataState = ref.watch(chartDataProvider);
+        final chartNotifier = ref.read(chartDataProvider.notifier);
+        final currentTimeFrame = chartDataState.settings.timeFrame;
+        
+        // 차트 데이터 로드 (필요시)
+        final chartData = chartNotifier.getChartData(_selectedStockCode!, currentTimeFrame);
+        if (chartData.isEmpty && !chartDataState.isLoading) {
+          // 페이지 로드 시 데이터 가져오기
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            chartNotifier.loadChartData(_selectedStockCode!, currentTimeFrame);
+          });
+        }
+
+        if (chartDataState.error != null) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error, size: 64, color: Colors.red.shade400),
+                const SizedBox(height: 16),
+                Text(
+                  '차트 데이터 로드 실패',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  chartDataState.error!,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    chartNotifier.clearError();
+                    chartNotifier.loadChartData(_selectedStockCode!, currentTimeFrame);
+                  },
+                  child: const Text('다시 시도'),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'fl_chart 라이브러리로 구현 예정',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade500,
+          );
+        }
+
+        if (chartData.isEmpty && chartDataState.isLoading) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('차트 데이터를 불러오는 중...'),
+              ],
             ),
-          ),
-        ],
-      ),
+          );
+        }
+
+        if (chartData.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.show_chart, size: 64, color: Colors.grey.shade400),
+                const SizedBox(height: 16),
+                Text(
+                  '차트 데이터 없음',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '해당 종목의 차트 데이터를 찾을 수 없습니다',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    chartNotifier.loadChartData(_selectedStockCode!, currentTimeFrame);
+                  },
+                  child: const Text('다시 로드'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return InteractiveStockChart(
+          stockCode: _selectedStockCode!,
+          data: chartData,
+          settings: chartDataState.settings,
+          onSettingsChanged: (newSettings) {
+            chartNotifier.updateSettings(newSettings);
+            
+            // 시간 단위가 변경된 경우 새 데이터 로드
+            if (newSettings.timeFrame != currentTimeFrame) {
+              chartNotifier.loadChartData(_selectedStockCode!, newSettings.timeFrame);
+            }
+          },
+        );
+      },
     );
   }
 
